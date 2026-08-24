@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>PromptPilot — Scheduled AI Prompts</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="logo">✦</span><span>PromptPilot</span></div>
+      <div class="status"><span class="dot"></span> Browser scheduler</div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">YOUR PERSONAL AI AUTOMATION</p>
+          <h1>Schedule a prompt.<br /><span>Let AI do the work.</span></h1>
+          <p class="sub">Create recurring AI prompts, run them automatically in your browser, and keep every result in one place.</p>
+        </div>
+        <div class="hero-card"><div class="spark">✦</div><strong>Runs locally</strong><span>Your schedules stay in this browser.</span></div>
+      </section>
+
+      <section class="grid">
+        <div class="panel editor">
+          <div class="panel-head"><h2>New scheduled prompt</h2><span class="badge">FREE</span></div>
+          <label>Prompt name</label>
+          <input id="name" placeholder="Daily AI news" maxlength="80" />
+          <label>What should AI do?</label>
+          <textarea id="prompt" rows="6" placeholder="Give me the 5 most important AI news stories today. Summarize each in 2 sentences and include the source name."></textarea>
+          <div class="row">
+            <div><label>Schedule</label><select id="frequency"><option value="daily">Every day</option><option value="weekdays">Weekdays</option><option value="weekly">Every week</option><option value="once">One time</option></select></div>
+            <div><label>Time</label><input id="time" type="time" value="08:00" /></div>
+          </div>
+          <div class="row hidden" id="dayRow"><div><label>Day of week</label><select id="weekday"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select></div><div></div></div>
+          <label>AI provider</label>
+          <select id="provider"><option value="openai">OpenAI</option></select>
+          <button id="save" class="primary">＋ Schedule prompt</button>
+          <p class="hint">The browser must be open for local scheduling. For true server-side 24/7 execution, connect a backend or GitHub Actions.</p>
+        </div>
+
+        <div class="panel schedules">
+          <div class="panel-head"><h2>Scheduled prompts</h2><span id="count" class="count">0</span></div>
+          <div id="empty" class="empty"><div class="empty-icon">◷</div><h3>No prompts yet</h3><p>Create your first scheduled AI prompt.</p></div>
+          <div id="list"></div>
+        </div>
+      </section>
+
+      <section class="panel history">
+        <div class="panel-head"><h2>Recent results</h2><button id="clearHistory" class="ghost">Clear</button></div>
+        <div id="history" class="history-list"><div class="empty small"><p>No AI results yet.</p></div></div>
+      </section>
+    </main>
+
+    <footer>PromptPilot · Your data is stored locally in this browser.</footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
