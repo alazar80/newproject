@@ -11,72 +11,55 @@ permissions:
   contents: write
   actions: read
 
-concurrency:
-  group: longcut-${{ github.repository }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
-      flutter: ${{ steps.detect.outputs.flutter }}
-      android: ${{ steps.detect.outputs.android }}
-      windows: ${{ steps.detect.outputs.windows }}
-      linux: ${{ steps.detect.outputs.linux }}
-      macos: ${{ steps.detect.outputs.macos }}
+      android: ${{ steps.d.outputs.android }}
+      flutter: ${{ steps.d.outputs.flutter }}
+      windows: ${{ steps.d.outputs.windows }}
+      linux: ${{ steps.d.outputs.linux }}
+      macos: ${{ steps.d.outputs.macos }}
     steps:
       - uses: actions/checkout@v6
-      - id: detect
+      - id: d
         shell: bash
         run: |
           flutter=false; android=false; windows=false; linux=false; macos=false
-          [ -f pubspec.yaml ] && flutter=true && android=true && windows=true && linux=true && macos=true
-          [ -f gradlew ] || [ -f settings.gradle ] || [ -f settings.gradle.kts ] && android=true
-          find . -maxdepth 3 -type f \( -name '*.sln' -o -name '*.csproj' \) -print -quit | grep -q . && windows=true || true
-          find . -maxdepth 3 -type f \( -name 'Package.swift' -o -name '*.xcodeproj' -o -name '*.xcworkspace' \) -print -quit | grep -q . && macos=true || true
-          [ -f Cargo.toml ] || [ -f CMakeLists.txt ] || [ -f Makefile ] && linux=true || true
-          echo "flutter=$flutter" >> "$GITHUB_OUTPUT"
-          echo "android=$android" >> "$GITHUB_OUTPUT"
-          echo "windows=$windows" >> "$GITHUB_OUTPUT"
-          echo "linux=$linux" >> "$GITHUB_OUTPUT"
-          echo "macos=$macos" >> "$GITHUB_OUTPUT"
+          if [ -f pubspec.yaml ]; then flutter=true; android=true; windows=true; linux=true; macos=true; fi
+          if [ -f gradlew ] || [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then android=true; fi
+          if find . -maxdepth 3 -type f \( -name '*.sln' -o -name '*.csproj' \) -print -quit | grep -q .; then windows=true; fi
+          if find . -maxdepth 3 -type f \( -name 'Package.swift' -o -name '*.xcodeproj' -o -name '*.xcworkspace' \) -print -quit | grep -q .; then macos=true; fi
+          if [ -f Cargo.toml ] || [ -f CMakeLists.txt ] || [ -f Makefile ]; then linux=true; fi
+          echo "flutter=$flutter" >> "$GITHUB_OUTPUT"; echo "android=$android" >> "$GITHUB_OUTPUT"; echo "windows=$windows" >> "$GITHUB_OUTPUT"; echo "linux=$linux" >> "$GITHUB_OUTPUT"; echo "macos=$macos" >> "$GITHUB_OUTPUT"
 
-  generic-ci:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Java/Gradle CI
-        if: ${{ hashFiles('gradlew', 'build.gradle', 'build.gradle.kts', 'pom.xml') != '' }}
+      - name: Node
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm ci || npm install; npm run build --if-present; npm test --if-present
+      - name: PHP
+        if: ${{ hashFiles('composer.json') != '' }}
+        run: composer install --no-interaction --prefer-dist --no-progress; if [ -f artisan ]; then php artisan test; fi
+      - name: Java/Gradle
+        if: ${{ hashFiles('pom.xml', 'gradlew', 'build.gradle', 'build.gradle.kts') != '' }}
         run: |
           if [ -f pom.xml ]; then mvn -B test; fi
           if [ -f gradlew ]; then chmod +x gradlew; ./gradlew test --no-daemon; fi
-      - name: Node CI
-        if: ${{ hashFiles('package.json') != '' }}
-        run: |
-          npm ci || npm install
-          npm run build --if-present
-          npm test --if-present
-      - name: PHP CI
-        if: ${{ hashFiles('composer.json') != '' }}
-        run: |
-          composer install --no-interaction --prefer-dist --no-progress
-          if [ -f artisan ]; then php artisan test || php artisan test --parallel; fi
-          php -v
-      - name: Python CI
+      - name: Python
         if: ${{ hashFiles('pyproject.toml', 'requirements.txt', 'setup.py') != '' }}
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -d tests ]; then python -m pytest; fi
-      - name: Create build metadata
+          [ ! -f requirements.txt ] || pip install -r requirements.txt
+          [ ! -d tests ] || python -m pytest
+      - name: Metadata
         run: |
           mkdir -p dist
-          { echo "repository=${GITHUB_REPOSITORY}"; echo "commit=${GITHUB_SHA}"; echo "ref=${GITHUB_REF}"; echo "run=${GITHUB_RUN_ID}"; echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; } > dist/build-metadata.txt
+          printf 'repository=%s\ncommit=%s\nref=%s\nbuilt_at=%s\n' "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_REF" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/build-metadata.txt
       - uses: actions/upload-artifact@v4
-        with:
-          name: generic-build-${{ github.sha }}
-          path: dist/build-metadata.txt
-          retention-days: 14
+        with: { name: generic-${{ github.sha }}, path: dist, retention-days: 14 }
 
   android:
     needs: detect
@@ -85,31 +68,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Flutter Android build
+        with: { distribution: temurin, java-version: '17' }
+      - uses: subosito/flutter-action@v2
         if: ${{ hashFiles('pubspec.yaml') != '' }}
-        uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
-      - name: Build Flutter Android packages
-        if: ${{ hashFiles('pubspec.yaml') != '' }}
+      - name: Build Android
         run: |
-          flutter pub get
-          flutter build apk --release
-          flutter build appbundle --release
           mkdir -p dist/android
-          cp build/app/outputs/flutter-apk/*.apk dist/android/ 2>/dev/null || true
-          cp build/app/outputs/bundle/release/*.aab dist/android/ 2>/dev/null || true
-      - name: Build native Android packages
-        if: ${{ hashFiles('pubspec.yaml') == '' }}
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease bundleRelease --no-daemon
-          mkdir -p dist/android
-          find . -type f \( -name '*.apk' -o -name '*.aab' \) -path '*/build/*' -exec cp {} dist/android/ \;
-      - name: Checksums
-        run: cd dist/android && sha256sum * > SHA256SUMS.txt
+          if [ -f pubspec.yaml ]; then flutter pub get; flutter build apk --release; flutter build appbundle --release; cp build/app/outputs/flutter-apk/*.apk dist/android/ 2>/dev/null || true; cp build/app/outputs/bundle/release/*.aab dist/android/ 2>/dev/null || true; else chmod +x gradlew; ./gradlew assembleRelease bundleRelease --no-daemon; find . -path '*/build/*' -type f \( -name '*.apk' -o -name '*.aab' \) -exec cp {} dist/android/ \;; fi
+          cd dist/android; sha256sum * > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with: { name: android-${{ github.sha }}, path: dist/android, retention-days: 30 }
 
@@ -119,29 +86,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Flutter Windows build
+      - uses: subosito/flutter-action@v2
         if: ${{ hashFiles('pubspec.yaml') != '' }}
-        uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
-      - name: Build Flutter Windows
-        if: ${{ hashFiles('pubspec.yaml') != '' }}
-        shell: pwsh
-        run: |
-          flutter pub get
-          flutter config --enable-windows-desktop
-          flutter build windows --release
-          New-Item -ItemType Directory -Force dist/windows | Out-Null
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/windows/${{ github.event.repository.name }}-windows-x64.zip -Force
-          if ((Select-String -Path pubspec.yaml -Pattern '^\s*msix\s*:' -Quiet)) { dart run msix:create; Get-ChildItem -Recurse build -Filter *.msix | Copy-Item -Destination dist/windows -Force; Get-ChildItem -Recurse build -Filter *.msixbundle | Copy-Item -Destination dist/windows -Force }
-      - name: Build .NET Windows
-        if: ${{ hashFiles('**/*.csproj', '**/*.sln') != '' && hashFiles('pubspec.yaml') == '' }}
+      - name: Build Windows
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist/windows | Out-Null
-          Get-ChildItem -Recurse -Filter *.csproj | ForEach-Object { dotnet publish $_.FullName -c Release -o (Join-Path 'dist/windows' $_.BaseName) }
-      - name: Checksums
-        shell: pwsh
-        run: { Get-ChildItem -Recurse dist/windows -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $($_.Path)" } | Out-File dist/windows/SHA256SUMS.txt }
+          if (Test-Path pubspec.yaml) { flutter pub get; flutter config --enable-windows-desktop; flutter build windows --release; Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/windows/${{ github.event.repository.name }}-windows-x64.zip -Force; if (Select-String -Path pubspec.yaml -Pattern '^\s*msix\s*:' -Quiet) { dart run msix:create; Get-ChildItem -Recurse build -Filter *.msix | Copy-Item -Destination dist/windows -Force; Get-ChildItem -Recurse build -Filter *.msixbundle | Copy-Item -Destination dist/windows -Force } } else { Get-ChildItem -Recurse -Filter *.csproj | ForEach-Object { dotnet publish $_.FullName -c Release -o (Join-Path 'dist/windows' $_.BaseName) } }
+          Get-ChildItem -Recurse dist/windows -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $($_.Path)" } | Out-File dist/windows/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with: { name: windows-${{ github.sha }}, path: dist/windows, retention-days: 30 }
 
@@ -151,26 +104,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Flutter Linux build
+      - uses: subosito/flutter-action@v2
         if: ${{ hashFiles('pubspec.yaml') != '' }}
-        uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
-      - name: Build Flutter Linux
-        if: ${{ hashFiles('pubspec.yaml') != '' }}
+      - name: Build Linux
         run: |
-          flutter pub get
-          flutter config --enable-linux-desktop
-          flutter build linux --release
           mkdir -p dist/linux
-          tar -czf dist/linux/${GITHUB_REPOSITORY##*/}-linux-x64.tar.gz -C build/linux/x64/release bundle
-      - name: Build generic Linux project
-        if: ${{ hashFiles('pubspec.yaml') == '' && hashFiles('Cargo.toml') != '' }}
-        run: |
-          cargo build --release
-          mkdir -p dist/linux
-          cp -r target/release dist/linux/
-      - name: Checksums
-        run: cd dist/linux && sha256sum * > SHA256SUMS.txt
+          if [ -f pubspec.yaml ]; then flutter pub get; flutter config --enable-linux-desktop; flutter build linux --release; tar -czf dist/linux/app-linux-x64.tar.gz -C build/linux/x64/release bundle; elif [ -f Cargo.toml ]; then cargo build --release; cp -r target/release dist/linux/; fi
+          cd dist/linux; sha256sum * > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with: { name: linux-${{ github.sha }}, path: dist/linux, retention-days: 30 }
 
@@ -180,38 +121,26 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Flutter macOS build
+      - uses: subosito/flutter-action@v2
         if: ${{ hashFiles('pubspec.yaml') != '' }}
-        uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
-      - name: Build Flutter macOS
-        if: ${{ hashFiles('pubspec.yaml') != '' }}
+      - name: Build macOS
         run: |
-          flutter pub get
-          flutter config --enable-macos-desktop
-          flutter build macos --release
           mkdir -p dist/macos
-          ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/*.app dist/macos/app.zip
-      - name: Build Swift package
-        if: ${{ hashFiles('pubspec.yaml') == '' && hashFiles('Package.swift') != '' }}
-        run: |
-          swift build -c release
-          mkdir -p dist/macos
-          tar -czf dist/macos/swift-release.tar.gz -C .build/release .
-      - name: Checksums
-        run: cd dist/macos && shasum -a 256 * > SHA256SUMS.txt
+          if [ -f pubspec.yaml ]; then flutter pub get; flutter config --enable-macos-desktop; flutter build macos --release; ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/*.app dist/macos/app.zip; elif [ -f Package.swift ]; then swift build -c release; tar -czf dist/macos/swift-release.tar.gz -C .build/release .; fi
+          cd dist/macos; shasum -a 256 * > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with: { name: macos-${{ github.sha }}, path: dist/macos, retention-days: 30 }
 
   release:
-    needs: [generic-ci, android, windows, linux, macos]
-    if: always() && startsWith(github.ref, 'refs/tags/') && needs.generic-ci.result == 'success' && (needs.android.result == 'success' || needs.android.result == 'skipped') && (needs.windows.result == 'success' || needs.windows.result == 'skipped') && (needs.linux.result == 'success' || needs.linux.result == 'skipped') && (needs.macos.result == 'success' || needs.macos.result == 'skipped')
+    needs: [ci, android, windows, linux, macos]
+    if: always() && startsWith(github.ref, 'refs/tags/') && needs.ci.result == 'success' && (needs.android.result == 'success' || needs.android.result == 'skipped') && (needs.windows.result == 'success' || needs.windows.result == 'skipped') && (needs.linux.result == 'success' || needs.linux.result == 'skipped') && (needs.macos.result == 'success' || needs.macos.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v5
         with: { path: release-assets }
-      - name: Create release
+      - name: Release
         env: { GH_TOKEN: ${{ github.token }} }
         run: |
-          find release-assets -type f -not -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > release-assets/SHA256SUMS.txt
-          gh release create "${GITHUB_REF_NAME}" release-assets/**/* --title "${GITHUB_REPOSITORY##*/} ${GITHUB_REF_NAME}" --generate-notes
+          mapfile -t assets < <(find release-assets -type f)
+          gh release create "${GITHUB_REF_NAME}" "${assets[@]}" --title "${GITHUB_REPOSITORY##*/} ${GITHUB_REF_NAME}" --generate-notes
