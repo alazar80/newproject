@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Event Intelligence Lab</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">LOCAL-FIRST ANALYTICS</p>
+      <h1>Event Intelligence Lab</h1>
+      <p class="subtitle">Turn timestamped observations into timelines, patterns, correlations, and explainable alerts.</p>
+    </div>
+    <div class="actions">
+      <button id="loadDemo">Load demo</button>
+      <label class="fileButton">Import JSON<input id="fileInput" type="file" accept="application/json"></label>
+      <button id="export">Export analysis</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="controls card">
+      <label>Search<input id="search" placeholder="source, type, entity, action..."></label>
+      <label>Minimum severity<select id="severity"><option value="0">All</option><option value="1">Info+</option><option value="2">Warning+</option><option value="3">Critical</option></select></label>
+      <label>Correlation window (minutes)<input id="window" type="number" min="1" max="1440" value="10"></label>
+    </section>
+
+    <section class="metrics">
+      <div class="metric card"><span>Events</span><strong id="eventCount">0</strong></div>
+      <div class="metric card"><span>Sources</span><strong id="sourceCount">0</strong></div>
+      <div class="metric card"><span>Patterns</span><strong id="patternCount">0</strong></div>
+      <div class="metric card"><span>Correlations</span><strong id="correlationCount">0</strong></div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <div class="sectionHead"><h2>Timeline</h2><span id="status">No data</span></div>
+        <div id="timeline" class="timeline"></div>
+      </article>
+      <article class="card">
+        <div class="sectionHead"><h2>Observations</h2></div>
+        <div id="observations" class="observations"></div>
+      </article>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
