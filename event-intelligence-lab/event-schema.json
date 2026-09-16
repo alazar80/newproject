@@ -1,0 +1,19 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"Event Intelligence Event",
+  "type":"object",
+  "required":["timestamp","source","type"],
+  "properties":{
+    "id":{"type":"string"},
+    "timestamp":{"type":"string","format":"date-time"},
+    "source":{"type":"string"},
+    "type":{"type":"string"},
+    "severity":{"type":"integer","minimum":0,"maximum":3},
+    "entity":{"type":"string"},
+    "action":{"type":"string"},
+    "value":{},
+    "unit":{"type":"string"},
+    "metadata":{"type":"object","additionalProperties":true}
+  },
+  "additionalProperties":true
+}
